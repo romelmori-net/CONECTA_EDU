@@ -1,4 +1,7 @@
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,52 +17,50 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
-  bool _passwordVisible = false;
-  String _userEmail = '';
-  String _userPassword = '';
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  late final GoogleSignIn _googleSignIn;
+  bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _passwordVisible = false;
 
   @override
-  void initState() {
-    super.initState();
-    _googleSignIn = GoogleSignIn.standard();
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  void _trySubmit() async {
-    final isValid = _formKey.currentState!.validate();
+  Future<void> _trySubmit() async {
+    final isValid = _formKey.currentState?.validate() ?? false;
     FocusScope.of(context).unfocus();
 
-    if (isValid) {
-      _formKey.currentState!.save();
-      setState(() => _isLoading = true);
+    if (!isValid) return;
 
-      try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _userEmail,
-          password: _userPassword,
-        );
-      } on FirebaseAuthException catch (err) {
-        final message = err.message ?? 'Ocurrió un error. Por favor, revisa tus credenciales.';
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message), backgroundColor: Theme.of(context).colorScheme.error),
-          );
-        }
-         if (mounted) {
-          setState(() => _isLoading = false);
-        }
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      // On success, the StreamBuilder in main.dart will handle navigation.
+      // We DO NOT set _isLoading back to false here, to prevent UI flicker.
+    } on FirebaseAuthException catch (err) {
+      // Only reset loading state on error
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar(err.message ?? 'Ocurrió un error. Por favor, revisa tus credenciales.');
       }
     }
   }
 
   Future<void> _googleSignInHandler() async {
-    setState(() => _isLoading = true);
+    setState(() => _isGoogleLoading = true);
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() => _isGoogleLoading = false); // User cancelled the sign-in
         return;
       }
 
@@ -69,16 +70,16 @@ class _LoginScreenState extends State<LoginScreen> {
         idToken: googleAuth.idToken,
       );
       
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = userCredential.user;
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
         final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
-        final userDocSnapshot = await userDoc.get();
+        final docSnapshot = await userDoc.get();
 
-        if (!userDocSnapshot.exists) {
+        if (!docSnapshot.exists) {
           await userDoc.set({
-            'name': user.displayName,
+            'fullName': user.displayName,
             'email': user.email,
             'photoUrl': user.photoURL,
             'createdAt': Timestamp.now(),
@@ -86,18 +87,47 @@ class _LoginScreenState extends State<LoginScreen> {
           });
         }
       }
+       // On success, StreamBuilder will navigate. We don't reset the loading state.
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al iniciar sesión con Google.')));
-        setState(() => _isLoading = false);
+        // Only reset loading state on error
+        setState(() => _isGoogleLoading = false);
+        _showErrorSnackBar('Error al iniciar sesión con Google. Inténtalo de nuevo.');
       }
     }
   }
 
+  void _resetPassword() {
+    if (_emailController.text.trim().isEmpty) {
+        _showErrorSnackBar('Ingresa tu correo para recuperar la contraseña.');
+        return;
+    }
+    try {
+        FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Se ha enviado un enlace de recuperación a tu correo.'), backgroundColor: Colors.green),
+        );
+    } catch (e) {
+        _showErrorSnackBar('No se pudo enviar el correo. Verifica la dirección.');
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF0F2F5), // Light grey background
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -105,118 +135,137 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Image.asset('assets/Logo.png', height: 80),
+                // --- HEADER ---
+                Image.asset('assets/images/Logo.png', height: 60),
                 const SizedBox(height: 16),
-                const Text(
-                  'BIENVENIDO',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1)),
+                Text(
+                  'Bienvenido a ConectaEDU',
+                  style: GoogleFonts.poppins(
+                    textStyle: textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF0A2540),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Inicia sesión o crea una cuenta para continuar',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.black.withOpacity(0.54)),
+                  'Inicia sesión para continuar',
+                  style: GoogleFonts.poppins(textStyle: textTheme.titleMedium?.copyWith(color: Colors.black54)),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
+
+                // --- FORM ---
                 Form(
                   key: _formKey,
                   child: Column(
                     children: [
-                      TextFormField(
-                        key: const ValueKey('email'),
-                        validator: (value) => (value!.isEmpty || !value.contains('@')) ? 'Ingresa un correo válido' : null,
-                        onSaved: (value) => _userEmail = value!,
+                      _buildTextFormField(
+                        controller: _emailController,
+                        hintText: 'Correo Institucional',
+                        prefixIcon: Icons.alternate_email,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDecoration('12345678@pronabec.edu.pe'),
+                        validator: (v) => (v == null || !v.contains('@')) ? 'Ingresa un correo válido' : null,
                       ),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        key: const ValueKey('password'),
-                        validator: (value) => (value!.isEmpty || value.length < 7) ? 'La contraseña debe tener al menos 7 caracteres' : null,
-                        onSaved: (value) => _userPassword = value!,
+                      _buildTextFormField(
+                        controller: _passwordController,
+                        hintText: 'Contraseña',
+                        prefixIcon: Icons.lock_outline,
                         obscureText: !_passwordVisible,
-                        decoration: _inputDecoration('Contraseña', isPassword: true),
+                        validator: (v) => (v == null || v.length < 7) ? 'La contraseña es muy corta' : null,
+                        suffixIcon: IconButton(
+                          icon: Icon(_passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                          onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                        ),
                       ),
-                      const SizedBox(height: 24),
-                      if (_isLoading)
-                        const CircularProgressIndicator()
-                      else
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _trySubmit,
-                            style: _buttonStyle(const Color(0xFF0D6EFD)),
-                            child: const Text('Ingresar'),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _resetPassword,
+                          child: Text(
+                            '¿Olvidaste tu contraseña?',
+                             style: GoogleFonts.poppins(color: Theme.of(context).primaryColor, fontWeight: FontWeight.w600)
                           ),
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      _formKey.currentState?.save();
-                      if (_userEmail.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa tu correo para recuperar la contraseña.')));
-                        return;
-                      }
-                      try {
-                         FirebaseAuth.instance.sendPasswordResetEmail(email: _userEmail);
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Se ha enviado un enlace a tu correo.')));
-                      } catch (e) {
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo enviar el correo. Verifica la dirección.')));
-                      }
-                    },
-                    child: const Text('¿Olvidaste tu contraseña?'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildDivider(),
-                const SizedBox(height: 24),
-                if (!_isLoading)
-                  Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          icon: SvgPicture.asset('assets/svgs/google_logo.svg', height: 24.0),
-                          onPressed: _googleSignInHandler,
-                          style: _buttonStyle(Colors.white, borderColor: Colors.grey.shade300),
-                          label: const Text('Continuar con Google', style: TextStyle(color: Colors.black87)),
-                        ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
+
+                      // --- SUBMIT BUTTON ---
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
-                          icon: SvgPicture.asset('assets/svgs/facebook.svg', height: 24.0), 
-                          onPressed: () { /* TODO: Implementar login con Facebook */ },
-                          style: _buttonStyle(const Color(0xFF1877F2)),
-                          label: const Text('Continuar con Facebook'),
+                        child: ElevatedButton(
+                          onPressed: _isLoading || _isGoogleLoading ? null : _trySubmit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D6EFD),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                          ),
+                          child: _isLoading
+                              ? const Text('Ingresando...')
+                              : Text(
+                                  'Ingresar',
+                                  style: GoogleFonts.poppins(
+                                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
                         ),
                       ),
                     ],
                   ),
+                ),
                 const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () {
-                    if (!_isLoading) {
-                      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const RegisterScreen()));
-                    }
-                  },
-                  child: Text.rich(
-                    TextSpan(
-                      text: '¿Aún no tienes una cuenta? ',
-                      style: TextStyle(color: Colors.black.withOpacity(0.54)),
-                      children: [
-                        const TextSpan(
-                          text: 'Regístrate ahora.',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D6EFD)),
-                        ),
-                      ],
+                const Row(
+                  children: [
+                    Expanded(child: Divider(thickness: 1)),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 12.0), child: Text('O', style: TextStyle(color: Colors.black54))),
+                    Expanded(child: Divider(thickness: 1)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // --- SOCIAL LOGINS ---
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: SvgPicture.asset('assets/svgs/google_logo.svg', height: 22.0),
+                    onPressed: _isLoading || _isGoogleLoading ? null : _googleSignInHandler,
+                    style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.white,
+                       foregroundColor: Colors.black87,
+                       shape: RoundedRectangleBorder(
+                         borderRadius: BorderRadius.circular(12),
+                         side: BorderSide(color: Colors.grey.shade300),
+                       ),
+                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
+                    label: _isGoogleLoading
+                      ? const Text('Conectando...')
+                      : Text('Continuar con Google', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // --- REGISTER REDIRECT ---
+                Text.rich(
+                  TextSpan(
+                    text: '¿Aún no tienes una cuenta? ',
+                    style: GoogleFonts.poppins(textStyle: const TextStyle(color: Colors.black54)),
+                    children: [
+                      TextSpan(
+                        text: 'Regístrate ahora',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        recognizer: TapGestureRecognizer()..onTap = () {
+                          if (!(_isLoading || _isGoogleLoading)) {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (context) => const RegisterScreen()));
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -227,45 +276,34 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, {bool isPassword = false}) {
-    return InputDecoration(
-      hintText: label,
-      filled: true,
-      fillColor: const Color(0xFFF0F2F5),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0D6EFD))),
-      suffixIcon: isPassword
-          ? IconButton(
-              icon: Icon(_passwordVisible ? Icons.visibility : Icons.visibility_off, color: Colors.grey,),
-              onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-            )
-          : null,
-    );
-  }
-
-  ButtonStyle _buttonStyle(Color backgroundColor, {Color? borderColor}) {
-    return ElevatedButton.styleFrom(
-      backgroundColor: backgroundColor,
-      foregroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: borderColor != null ? BorderSide(color: borderColor) : BorderSide.none,
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Row(
-      children: [
-        Expanded(child: Divider()),
-        Padding(padding: EdgeInsets.symmetric(horizontal: 8.0), child: Text('O')),
-        Expanded(child: Divider()),
-      ],
-    );
+  Widget _buildTextFormField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData prefixIcon,
+    required FormFieldValidator<String> validator,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    Widget? suffixIcon,
+  }) {
+    return TextFormField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        validator: validator,
+        decoration: InputDecoration(
+          prefixIcon: Icon(prefixIcon, color: Colors.grey.shade600),
+          suffixIcon: suffixIcon,
+          hintText: hintText,
+          hintStyle: GoogleFonts.poppins(),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
+          errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade400, width: 1.5)),
+          focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
+        ),
+        textInputAction: TextInputAction.next,
+      );
   }
 }

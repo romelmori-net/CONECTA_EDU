@@ -16,13 +16,12 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // AQUÍ ESTÁ LA CORRECCIÓN: Añadido 'const' a cada elemento de la lista.
   static const List<Widget> _widgetOptions = <Widget>[
-    const DashboardScreen(),
-    const AcademicHomeScreen(),
-    const EmotionalHomeScreen(),
-    const SocialHomeScreen(),
-    const ProfileScreen(),
+    DashboardScreen(),
+    AcademicHomeScreen(),
+    EmotionalHomeScreen(),
+    SocialHomeScreen(),
+    ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {

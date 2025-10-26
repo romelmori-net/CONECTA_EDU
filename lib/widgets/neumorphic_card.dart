@@ -76,7 +76,7 @@ class _NeumorphicCardState extends State<NeumorphicCard> {
             Icon(
               widget.icon,
               size: 40,
-              color: const Color(0xFF394452).withOpacity(0.8),
+              color: const Color(0xFF394452).withAlpha(204), // withOpacity(0.8) corrected
             ),
             const SizedBox(height: 15),
             Text(

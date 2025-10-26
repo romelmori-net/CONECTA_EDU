@@ -208,8 +208,8 @@ class _EmotionalOnboardingScreenState extends State<EmotionalOnboardingScreen> {
                 ),
                 elevation: 1,
                 pressElevation: 3,
-                shadowColor: Colors.black.withOpacity(0.1),
-                selectedShadowColor: option.color.withOpacity(0.3),
+                shadowColor: Colors.black.withAlpha(26), // withOpacity(0.1) corrected
+                selectedShadowColor: option.color.withAlpha(77), // withOpacity(0.3) corrected
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               );

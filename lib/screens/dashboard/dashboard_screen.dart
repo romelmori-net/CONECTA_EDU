@@ -1,11 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-// =========================================================================
-// MODO DE DEPURACIÓN: AISLANDO LA FALLA
-// Se han reemplazado todas las pestañas por contenedores de colores.
-// Si esto funciona, el problema está en una de las pantallas originales.
-// =========================================================================
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,92 +12,134 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0;
+  DocumentSnapshot? _userData;
+  bool _isLoading = true;
 
-  // Lista de widgets de prueba. Son inofensivos.
-  static const List<Widget> _widgetOptions = <Widget>[
-    _DebugScreen(color: Colors.blue, name: 'Inicio (Prueba)'),
-    _DebugScreen(color: Colors.green, name: 'Académico (Prueba)'),
-    _DebugScreen(color: Colors.orange, name: 'Emocional (Prueba)'),
-    _DebugScreen(color: Colors.purple, name: 'Social (Prueba)'),
-    _DebugScreen(color: Colors.red, name: 'Perfil (Prueba)'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+  Future<void> _fetchUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (mounted) {
+          setState(() {
+            _userData = doc;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showErrorSnackBar('No se pudieron cargar los datos del usuario.');
+        }
+      }
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _widgetOptions,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        selectedItemColor: const Color(0xFF0D6EFD),
-        unselectedItemColor: Colors.grey[600],
-        selectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 12),
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Académico'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite_border), label: 'Emocional'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Social'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Perfil'),
+      appBar: AppBar(
+        title: Text(
+          'ConectaEDU',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        actions: [
+          _buildUserProfileMenu(),
         ],
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildUserProfileMenu() {
+    final photoUrl = _userData?.data() is Map<String, dynamic> 
+      ? (_userData!.data() as Map<String, dynamic>)['photoUrl'] as String? 
+      : null;
+
+    return PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'logout') {
+          FirebaseAuth.instance.signOut();
+        }
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        const PopupMenuItem<String>(
+          value: 'logout',
+          child: ListTile(
+            leading: Icon(Icons.exit_to_app),
+            title: Text('Cerrar Sesión'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: CircleAvatar(
+          backgroundColor: Colors.grey.shade300,
+          backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+          child: (photoUrl == null || photoUrl.isEmpty)
+              ? const Icon(Icons.person, color: Colors.white)
+              : null,
+        ),
       ),
     );
   }
-}
 
-// Widget de prueba simple para mostrar en lugar de las pantallas reales.
-class _DebugScreen extends StatelessWidget {
-  final Color color;
-  final String name;
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-  const _DebugScreen({required this.color, required this.name});
+    final data = _userData?.data();
+    String userName = 'Usuario';
+    if (data != null && data is Map<String, dynamic> && data.containsKey('fullName')) {
+        final rawName = data['fullName'] as String?;
+        if (rawName != null && rawName.isNotEmpty) {
+            userName = rawName.split(' ').first; // Get the first name
+        }
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: color,
-      appBar: AppBar(
-        title: Text(name),
-        backgroundColor: Colors.black.withOpacity(0.2),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.bug_report, size: 80, color: Colors.white),
-            const SizedBox(height: 20),
-            Text(
-              'MODO DEPURACIÓN ACTIVO',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '¡Hola, $userName!',
+            style: GoogleFonts.poppins(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0A2540),
             ),
-             const SizedBox(height: 10),
-             Text(
-              'Si ves esto, la navegación es CORRECTA.\nEl error está en una de las pantallas reales.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Bienvenido a tu Dashboard.',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              color: Colors.black54,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

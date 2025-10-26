@@ -174,7 +174,7 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             elevation: 5,
-            shadowColor: const Color(0xFF2196F3).withOpacity(0.4),
+            shadowColor: const Color(0xFF2196F3).withAlpha(102), // withOpacity(0.4) corrected
           ),
           child: const Text(
             'Guardar y continuar',

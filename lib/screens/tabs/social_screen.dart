@@ -85,7 +85,7 @@ class SocialScreen extends StatelessWidget {
                     onPressed: () {},
                     child: const Text('Ver'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                      backgroundColor: Theme.of(context).primaryColor.withAlpha(26), // withOpacity(0.1) corrected
                       foregroundColor: Theme.of(context).primaryColor,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

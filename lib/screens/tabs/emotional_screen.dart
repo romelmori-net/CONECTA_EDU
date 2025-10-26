@@ -95,7 +95,7 @@ class EmotionalScreen extends StatelessWidget {
         fontWeight: FontWeight.w600,
       ),
       backgroundColor: isSelected ? Theme.of(context).primaryColor : Colors.white,
-      side: BorderSide(color: Theme.of(context).primaryColor.withOpacity(0.5)),
+      side: BorderSide(color: Theme.of(context).primaryColor.withAlpha(128)), // withOpacity(0.5) corrected
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
     );
   }
