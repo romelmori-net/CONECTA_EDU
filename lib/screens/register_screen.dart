@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:myapp/screens/dashboard/dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,7 +18,6 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // Controllers for TextFormFields for better state management
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -36,7 +34,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    // Dispose controllers to free up resources
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -50,8 +47,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _pickImage() async {
     final pickedImage = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      imageQuality: 50, // Compress image
-      maxWidth: 400,   // Resize image
+      imageQuality: 50,
+      maxWidth: 400,
     );
     if (pickedImage != null) {
       setState(() {
@@ -62,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _trySubmit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    FocusScope.of(context).unfocus(); // Close keyboard
+    FocusScope.of(context).unfocus();
 
     if (!isValid) {
       _showErrorSnackBar('Por favor, corrige los errores en el formulario.');
@@ -91,7 +88,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         throw Exception('Error inesperado: no se pudo obtener el usuario creado.');
       }
 
-      // Conditionally upload image and get URL
       String? imageUrl;
       if (_userImageFile != null) {
         final ref = FirebaseStorage.instance.ref().child('user_images').child('${user.uid}.jpg');
@@ -99,42 +95,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
         imageUrl = await ref.getDownloadURL();
       }
 
-      // Save user data to Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'fullName': _nameController.text.trim(),
         'email': email,
         'phone': _phoneController.text.trim(),
         'career': _careerController.text.trim(),
         'interests': _interestsController.text.trim(),
-        'photoUrl': imageUrl ?? '', // Save URL or empty string
+        'photoUrl': imageUrl ?? '',
         'createdAt': Timestamp.now(),
         'hasCompletedOnboarding': false,
       });
 
       if (mounted) {
-        // On success, the StreamBuilder in main.dart will handle navigation.
-        // We DO NOT set _isLoading back to false here, to prevent UI flicker.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Registro exitoso! Serás dirigido a completar tu perfil.'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
 
     } on FirebaseAuthException catch (err) {
+      if (mounted) setState(() => _isLoading = false);
       String message = 'Ocurrió un error de autenticación.';
       if (err.code == 'email-already-in-use') {
         message = 'Este correo electrónico ya está en uso.';
       } else if (err.code == 'weak-password') {
         message = 'La contraseña es demasiado débil.';
-      } else if (err.message != null) {
-        message = err.message!;
       }
       _showErrorSnackBar(message);
     } on FormatException catch (err) {
+      if (mounted) setState(() => _isLoading = false);
       _showErrorSnackBar(err.message);
     } catch (err) {
+      if (mounted) setState(() => _isLoading = false);
       _showErrorSnackBar('Ocurrió un error inesperado. Inténtalo de nuevo.');
-    } finally {
-      if (mounted) {
-         // Only reset loading state on error
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -162,7 +157,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                // --- HEADER ---
                 Image.asset('assets/images/Logo.png', height: 50),
                 const SizedBox(height: 16),
                 Text(
@@ -173,6 +167,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: const Color(0xFF0A2540),
                     ),
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -181,7 +176,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // --- PROFILE IMAGE PICKER ---
                 GestureDetector(
                   onTap: _pickImage,
                   child: Stack(
@@ -209,7 +203,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // --- FORM ---
                 Form(
                   key: _formKey,
                   child: Column(
@@ -270,7 +263,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- TERMS AND CONDITIONS ---
                       CheckboxListTile(
                         value: _agreedToTerms,
                         onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
@@ -287,7 +279,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   decoration: TextDecoration.underline,
                                 ),
                                 recognizer: TapGestureRecognizer()..onTap = () {
-                                  // Placeholder for showing terms
                                   print('Navigate to Terms & Conditions');
                                 },
                               ),
@@ -300,7 +291,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // --- SUBMIT BUTTON ---
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -326,7 +316,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // --- LOGIN REDIRECT ---
                 Text.rich(
                   TextSpan(
                     text: '¿Ya tienes una cuenta? ',
@@ -353,7 +342,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // --- Reusable TextFormField Widget ---
   Widget _buildTextFormField({
     required TextEditingController controller,
     required String hintText,

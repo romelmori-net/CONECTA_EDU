@@ -1,3 +1,4 @@
+
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -78,6 +79,7 @@ class AuthWrapper extends StatelessWidget {
   }
 }
 
+// REBUILT ONBOARDING CHECK FOR ROBUSTNESS
 class OnboardingCheck extends StatelessWidget {
   const OnboardingCheck({super.key});
 
@@ -90,7 +92,8 @@ class OnboardingCheck extends StatelessWidget {
       return const LoginScreen(); 
     }
 
-    return FutureBuilder<DocumentSnapshot>(
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      // The type <Map<String, dynamic>> is important for type safety
       future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -102,20 +105,24 @@ class OnboardingCheck extends StatelessWidget {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
 
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          final hasCompletedOnboarding = userData['hasCompletedOnboarding'] ?? false;
+        // The default, safe path is to assume onboarding is needed.
+        bool hasCompletedOnboarding = false;
 
-          if (hasCompletedOnboarding) {
+        // Only if the document exists and contains the field, we update our assumption.
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data();
+          // Safely check for the field. If it doesn't exist, `get` returns null.
+          if (data != null && data.containsKey('hasCompletedOnboarding')) {
+             hasCompletedOnboarding = data['hasCompletedOnboarding'] as bool;
+          }
+        }
+
+        if (hasCompletedOnboarding) {
             developer.log('User has completed onboarding, navigating to dashboard', name: 'OnboardingCheck');
             return const DashboardScreen();
-          } else {
-            developer.log('User has NOT completed onboarding, navigating to onboarding screen', name: 'OnboardingCheck');
-            return const AcademicOnboardingScreen();
-          }
         } else {
-          developer.log('User document does not exist, navigating to onboarding screen', name: 'OnboardingCheck');
-          return const AcademicOnboardingScreen();
+            developer.log('User has NOT completed onboarding (or field missing), navigating to onboarding screen', name: 'OnboardingCheck');
+            return const AcademicOnboardingScreen();
         }
       },
     );

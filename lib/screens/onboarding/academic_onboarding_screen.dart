@@ -1,6 +1,11 @@
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:myapp/screens/onboarding/emotional_onboarding_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:myapp/screens/onboarding/social_onboarding_screen.dart';
 
 class AcademicOnboardingScreen extends StatefulWidget {
   const AcademicOnboardingScreen({super.key});
@@ -11,6 +16,7 @@ class AcademicOnboardingScreen extends StatefulWidget {
 
 class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> with TickerProviderStateMixin {
   late AnimationController _controller;
+  bool _isLoading = false;
   final Map<String, List<String>> _selections = {
     'interests': [],
     'courses': [],
@@ -44,11 +50,63 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
     });
   }
 
-  void _navigateToNext() {
-    // Aquí deberías guardar los datos en Firestore si es necesario
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (context) => EmotionalOnboardingScreen(academicData: _selections),
-    ));
+  // RESTRUCTURED SAVE FUNCTION
+  Future<void> _saveAndNavigate() async {
+    if (_selections.values.any((list) => list.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, selecciona al menos una opción en cada categoría.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Usuario no autenticado.'), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    try {
+      // This now writes to the new nested structure: onboarding -> academic
+      final dataToSave = {
+        'onboarding': {
+          'academic': _selections,
+        }
+      };
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(dataToSave, SetOptions(merge: true)) // merge:true is crucial
+          .timeout(const Duration(seconds: 15));
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const SocialOnboardingScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e is TimeoutException
+                ? 'La conexión es lenta. Por favor, inténtalo de nuevo.'
+                : 'Ocurrió un error al guardar los datos.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -58,7 +116,7 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text('Onboarding Académico', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          title: Text('1/3: Perfil Académico', style: GoogleFonts.poppins(color: Colors.black, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
           centerTitle: true,
@@ -70,10 +128,10 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildAnimatedHeader(0.0, 0.3),
-              _buildAnimatedSection('Intereses', ['Matemáticas', 'Ciencias', 'Idiomas', 'Artes', 'Humanidades', 'Tecnología'], 'interests', 0.2, 0.5),
-              _buildAnimatedSection('Cursos', ['Cálculo', 'Programación', 'Historia', 'Física', 'Literatura', 'Inglés'], 'courses', 0.3, 0.6),
-              _buildAnimatedSection('Dificultades', ['Procrastinación', 'Ansiedad', 'Estrés', 'Falta de motivación'], 'difficulties', 0.4, 0.7),
-              _buildAnimatedSection('Objetivos', ['Mejorar notas', 'Aprender algo nuevo', 'Preparar exámenes'], 'objectives', 0.5, 0.8),
+              _buildAnimatedSection('Tus Intereses Principales', ['Matemáticas', 'Ciencias', 'Idiomas', 'Artes', 'Humanidades', 'Tecnología'], 'interests', 0.2, 0.5),
+              _buildAnimatedSection('Cursos de Enfoque', ['Cálculo', 'Programación', 'Historia', 'Física', 'Literatura', 'Inglés'], 'courses', 0.3, 0.6),
+              _buildAnimatedSection('Desafíos Comunes', ['Procrastinación', 'Ansiedad por exámenes', 'Estrés', 'Falta de motivación'], 'difficulties', 0.4, 0.7),
+              _buildAnimatedSection('Tus Metas Actuales', ['Mejorar notas', 'Aprender una habilidad', 'Preparar exámenes finales'], 'objectives', 0.5, 0.8),
               const SizedBox(height: 32),
               _buildAnimatedContinueButton(0.7, 1.0),
             ],
@@ -104,14 +162,14 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-            const Text(
-              '¿Qué te interesa?',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1)),
+            Text(
+              'Personaliza tu camino',
+              style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold, color: const Color(0xFF0D47A1)),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Selecciona tus intereses, cursos, dificultades y objetivos académicos para personalizar tu experiencia',
-              style: TextStyle(fontSize: 16, color: Colors.black54),
+            Text(
+              'Ayúdanos a entender tus metas y desafíos para ofrecerte el mejor apoyo.',
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.black54),
             ),
             const SizedBox(height: 24),
         ],
@@ -128,7 +186,7 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black87),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -137,7 +195,7 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
             children: options.map((option) {
               final isSelected = _selections[category]!.contains(option);
               return ChoiceChip(
-                label: Text(option),
+                label: Text(option, style: GoogleFonts.poppins()),
                 selected: isSelected,
                 onSelected: (selected) => _toggleSelection(category, option),
                 backgroundColor: Colors.grey[100],
@@ -167,19 +225,21 @@ class _AcademicOnboardingScreenState extends State<AcademicOnboardingScreen> wit
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: _navigateToNext,
+          onPressed: _isLoading ? null : _saveAndNavigate,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF2196F3),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             elevation: 5,
-            shadowColor: const Color(0xFF2196F3).withAlpha(102), // withOpacity(0.4) corrected
+            shadowColor: const Color(0xFF2196F3).withAlpha(102),
           ),
-          child: const Text(
-            'Guardar y continuar',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text(
+                'Guardar y Continuar',
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
         ),
       ),
     );
