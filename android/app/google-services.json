@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "149158101343",
+    "project_id": "conectaedu-8e998",
+    "storage_bucket": "conectaedu-8e998.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149158101343:android:d39682832659d3651876ea",
+        "android_client_info": {
+          "package_name": "com.example.myapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149158101343-p943lk3uj7mnjg3ljrgn5tl4n6k4vtdu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAgpCnYcZ8G1WlKOLjcCQ-uq23F2Ta8DA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149158101343-p943lk3uj7mnjg3ljrgn5tl4n6k4vtdu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
